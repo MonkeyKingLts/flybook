@@ -40,12 +40,15 @@ export function AppSidebar() {
               key={item.href}
               to={item.href}
               className={cn(
-                'flex h-10 items-center gap-3 rounded-md px-3 text-sm transition-colors',
+                'relative flex h-10 items-center gap-3 rounded-md px-3 text-sm transition-colors',
                 active
-                  ? 'bg-accent font-medium text-accent-foreground'
+                  ? 'bg-accent font-medium text-primary'
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground',
               )}
             >
+              {active ? (
+                <span className="absolute top-1/2 left-0 h-5 w-[3px] -translate-y-1/2 rounded-r bg-primary" />
+              ) : null}
               <Icon className="size-4" />
               {item.label}
             </Link>

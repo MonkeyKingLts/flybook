@@ -6,7 +6,7 @@ import { currentOrg, currentUser } from '@/data/mock'
 
 export function AppHeader() {
   return (
-    <header className="flex h-14 items-center gap-4 border-b border-border bg-card px-6">
+    <header className="flex h-14 items-center gap-4 border-b border-border bg-card px-6 shadow-sm">
       <Button variant="outline" className="gap-2">
         {currentOrg.name}
         <ChevronDown className="size-4 text-muted-foreground" />

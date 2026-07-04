@@ -1,3 +1,4 @@
+import { useParams } from 'react-router-dom'
 import {
   Table,
   TableBody,
@@ -9,14 +10,18 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Checkbox } from '@/components/ui/checkbox'
 import { PriorityBadge, StatusBadge } from '@/components/task/task-badges'
-import { mockTasks } from '@/data/mock'
+import { useTasks } from '@/contexts/task-context'
 
 export function ProjectListPage() {
+  const { projectId = '1' } = useParams()
+  const { getProjectTasks, openTask } = useTasks()
+  const tasks = getProjectTasks(projectId)
+
   return (
-    <div className="rounded-lg border border-border bg-card">
+    <div className="overflow-hidden rounded-lg border border-border bg-card">
       <Table>
         <TableHeader>
-          <TableRow>
+          <TableRow className="bg-muted/40 hover:bg-muted/40">
             <TableHead className="w-10" />
             <TableHead>标题</TableHead>
             <TableHead>状态</TableHead>
@@ -27,9 +32,13 @@ export function ProjectListPage() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {mockTasks.map((task) => (
-            <TableRow key={task.id}>
-              <TableCell>
+          {tasks.map((task) => (
+            <TableRow
+              key={task.id}
+              className="cursor-pointer"
+              onClick={() => openTask(task.id)}
+            >
+              <TableCell onClick={(event) => event.stopPropagation()}>
                 <Checkbox />
               </TableCell>
               <TableCell>

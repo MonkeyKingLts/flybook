@@ -39,5 +39,6 @@ export interface Task {
   assignee?: User
   dueDate?: string
   updatedAt: string
+  createdAt?: string
   commentCount?: number
 }
