@@ -322,4 +322,60 @@ Reference feel: Lark Feishu task module, not Western startup aesthetic.
 
 ---
 
+## 14. 前端技术栈
+
+| 类别 | 选型 | 说明 |
+|------|------|------|
+| 框架 | React 19 + TypeScript | 函数组件 + Hooks |
+| 构建 | Vite | 快速热更新 |
+| 样式 | Tailwind CSS v4 | 原子化 CSS |
+| 组件库 | shadcn/ui | 可定制、飞书风主题 |
+| 路由 | React Router v7 | 页面路由 |
+| 请求 | TanStack Query | 服务端状态管理 |
+| 图标 | Lucide React | 线性图标 |
+| 图表 | Recharts（待接入） | Dashboard 统计 |
+
+### 14.1 主题配置
+
+飞书主色已写入 `frontend/src/index.css`：
+
+```css
+--primary: #3370ff;
+--background: #f5f6f7;
+--border: #e5e6eb;
+```
+
+### 14.2 目录结构
+
+```
+frontend/src/
+├── components/
+│   ├── layout/       # 侧栏、顶栏、应用壳
+│   ├── task/         # 任务相关组件
+│   └── ui/           # shadcn 组件
+├── pages/            # 页面（按路由）
+├── data/mock.ts      # Mock 数据（后端就绪前使用）
+├── types/            # TypeScript 类型
+├── lib/constants.ts  # 状态色、标签文案
+└── api/              # API 请求层（待建）
+```
+
+### 14.3 shadcn 组件映射
+
+| 设计元素 | shadcn 组件 |
+|----------|-------------|
+| 按钮 | `Button` |
+| 输入框 | `Input` / `Textarea` |
+| 卡片 | `Card` |
+| 标签 | `Badge` |
+| 表格 | `Table` |
+| 弹窗 | `Dialog` |
+| 抽屉 | `Sheet` |
+| 下拉 | `DropdownMenu` / `Select` |
+| Tab | `Tabs` |
+| 头像 | `Avatar` |
+| 通知 | `Sonner` |
+
+---
+
 *最后更新：2026-07-04*
