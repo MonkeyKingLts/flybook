@@ -1,16 +1,25 @@
-import { Bell, ChevronDown, Search } from 'lucide-react'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { OrganizationSwitcher, UserButton } from '@clerk/clerk-react'
+import { Bell, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { currentOrg, currentUser } from '@/data/mock'
+import { clerkAppearance } from '@/lib/clerk-appearance'
 
 export function AppHeader() {
   return (
     <header className="flex h-14 items-center gap-4 border-b border-border bg-card px-6 shadow-sm">
-      <Button variant="outline" className="gap-2">
-        {currentOrg.name}
-        <ChevronDown className="size-4 text-muted-foreground" />
-      </Button>
+      <OrganizationSwitcher
+        hidePersonal
+        afterSelectOrganizationUrl="/dashboard"
+        afterCreateOrganizationUrl="/dashboard"
+        appearance={{
+          ...clerkAppearance,
+          elements: {
+            ...clerkAppearance.elements,
+            organizationSwitcherTrigger:
+              'border border-[#E5E6EB] rounded-md px-3 py-1.5 text-sm',
+          },
+        }}
+      />
 
       <div className="relative mx-auto w-full max-w-md">
         <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -22,11 +31,14 @@ export function AppHeader() {
           <Bell className="size-4" />
           <span className="absolute top-2 right-2 size-2 rounded-full bg-destructive" />
         </Button>
-        <Avatar className="size-8">
-          <AvatarFallback className="bg-primary text-primary-foreground">
-            {currentUser.name.slice(0, 1)}
-          </AvatarFallback>
-        </Avatar>
+        <UserButton
+          afterSignOutUrl="/login"
+          appearance={{
+            elements: {
+              avatarBox: 'size-8',
+            },
+          }}
+        />
       </div>
     </header>
   )
