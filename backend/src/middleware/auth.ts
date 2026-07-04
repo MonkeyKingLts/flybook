@@ -26,6 +26,8 @@ function mapClerkOrgRole(role: string | undefined): OrgRole {
       return 'ADMIN'
     case 'org:member':
       return 'MEMBER'
+    case 'org:guest':
+      return 'GUEST'
     default:
       return 'MEMBER'
   }

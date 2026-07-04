@@ -74,7 +74,9 @@ export function TaskProvider({ children }: { children: ReactNode }) {
       const projects = await request<Array<{ id: string }>>('/api/v1/projects')
       const taskLists = await Promise.all(
         projects.map((project) =>
-          request<Task[]>(`/api/v1/projects/${project.id}/tasks`),
+          request<{ items: Task[] }>(`/api/v1/projects/${project.id}/tasks`).then(
+            (res) => res.items,
+          ),
         ),
       )
       return taskLists.flat()

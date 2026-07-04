@@ -1,8 +1,9 @@
 import { prisma } from '../lib/prisma.js'
 import { BadRequestError, NotFoundError } from '../lib/errors.js'
+import { pickProjectColor } from '../utils/serializers.js'
 
 export async function listProjects(organizationId: string) {
-  const projects = await prisma.project.findMany({
+  return prisma.project.findMany({
     where: { organizationId },
     include: {
       tasks: { select: { status: true } },
@@ -10,7 +11,6 @@ export async function listProjects(organizationId: string) {
     },
     orderBy: { updatedAt: 'desc' },
   })
-  return projects
 }
 
 export async function getProject(projectId: string, organizationId: string) {
@@ -28,7 +28,7 @@ export async function getProject(projectId: string, organizationId: string) {
 export async function createProject(
   organizationId: string,
   userId: string,
-  input: { name: string; key: string; description?: string },
+  input: { name: string; key: string; description?: string; color?: string },
 ) {
   const key = input.key.toUpperCase()
   if (!/^[A-Z]{2,5}$/.test(key)) {
@@ -40,6 +40,8 @@ export async function createProject(
   })
   if (existing) throw new BadRequestError('项目 Key 已存在')
 
+  const color = input.color ?? pickProjectColor(key)
+
   return prisma.$transaction(async (tx) => {
     const project = await tx.project.create({
       data: {
@@ -47,6 +49,7 @@ export async function createProject(
         name: input.name,
         key,
         description: input.description,
+        color,
       },
       include: {
         tasks: { select: { status: true } },
@@ -66,10 +69,41 @@ export async function createProject(
   })
 }
 
-export async function listProjectMembers(
+export async function updateProject(
   projectId: string,
   organizationId: string,
+  input: { name?: string; description?: string; color?: string },
 ) {
+  const project = await prisma.project.findFirst({
+    where: { id: projectId, organizationId },
+  })
+  if (!project) throw new NotFoundError('项目不存在')
+
+  return prisma.project.update({
+    where: { id: projectId },
+    data: {
+      name: input.name,
+      description: input.description,
+      color: input.color,
+    },
+    include: {
+      tasks: { select: { status: true } },
+      members: { include: { user: true } },
+    },
+  })
+}
+
+export async function deleteProject(projectId: string, organizationId: string) {
+  const project = await prisma.project.findFirst({
+    where: { id: projectId, organizationId },
+  })
+  if (!project) throw new NotFoundError('项目不存在')
+
+  await prisma.project.delete({ where: { id: projectId } })
+  return { deleted: true }
+}
+
+export async function listProjectMembers(projectId: string, organizationId: string) {
   const project = await prisma.project.findFirst({
     where: { id: projectId, organizationId },
   })
@@ -87,56 +121,6 @@ export async function listProjectMembers(
     email: member.user.email,
     avatar: member.user.avatarUrl ?? undefined,
     role: member.role.toLowerCase(),
+    joinedAt: member.joinedAt.toISOString().slice(0, 10),
   }))
-}
-
-export async function getProjectStats(projectId: string, organizationId: string) {
-  const project = await prisma.project.findFirst({
-    where: { id: projectId, organizationId },
-  })
-  if (!project) throw new NotFoundError('项目不存在')
-
-  const [statusGroups, priorityGroups, assigneeGroups, total, done] = await Promise.all([
-    prisma.task.groupBy({
-      by: ['status'],
-      where: { projectId },
-      _count: { _all: true },
-    }),
-    prisma.task.groupBy({
-      by: ['priority'],
-      where: { projectId },
-      _count: { _all: true },
-    }),
-    prisma.task.groupBy({
-      by: ['assigneeId'],
-      where: { projectId, assigneeId: { not: null } },
-      _count: { _all: true },
-    }),
-    prisma.task.count({ where: { projectId } }),
-    prisma.task.count({ where: { projectId, status: 'DONE' } }),
-  ])
-
-  const assigneeIds = assigneeGroups
-    .map((g) => g.assigneeId)
-    .filter((id): id is string => Boolean(id))
-
-  const users = await prisma.user.findMany({
-    where: { id: { in: assigneeIds } },
-    select: { id: true, name: true },
-  })
-
-  const userMap = Object.fromEntries(users.map((u) => [u.id, u.name]))
-
-  return {
-    total,
-    done,
-    completionRate: total ? Math.round((done / total) * 100) : 0,
-    overdue: 0,
-    statusGroups,
-    priorityGroups,
-    assigneeWorkload: assigneeGroups.map((g) => ({
-      name: g.assigneeId ? userMap[g.assigneeId] ?? '未分配' : '未分配',
-      count: g._count._all,
-    })),
-  }
 }

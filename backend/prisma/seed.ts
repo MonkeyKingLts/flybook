@@ -2,6 +2,27 @@ import { PrismaClient, TaskPriority, TaskStatus } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
+const PROJECTS = [
+  {
+    key: 'FB',
+    name: '飞书迁移',
+    description: '致力于提升团队内部沟通与任务流转效率',
+    color: '#3370FF',
+  },
+  {
+    key: 'WEB',
+    name: '官网重构 2.0',
+    description: '品牌官网视觉升级与信息架构重构',
+    color: '#7F3BF5',
+  },
+  {
+    key: 'APP',
+    name: 'App 开发',
+    description: '移动端核心功能迭代与性能优化',
+    color: '#FF8800',
+  },
+]
+
 async function main() {
   console.log('Seeding database...')
 
@@ -12,7 +33,7 @@ async function main() {
       slug: 'xingchen-tech',
       clerkOrgId: 'org_seed_demo',
     },
-    update: {},
+    update: { name: '星辰科技' },
   })
 
   const users = await Promise.all(
@@ -43,24 +64,35 @@ async function main() {
     })
   }
 
-  const project = await prisma.project.upsert({
-    where: { organizationId_key: { organizationId: org.id, key: 'FB' } },
-    create: {
-      organizationId: org.id,
-      name: '飞书迁移',
-      key: 'FB',
-      description: '致力于提升团队内部沟通与任务流转效率',
-    },
-    update: {},
-  })
-
-  for (const user of users) {
-    await prisma.projectMember.upsert({
-      where: { projectId_userId: { projectId: project.id, userId: user.id } },
-      create: { projectId: project.id, userId: user.id, role: 'DEVELOPER' },
-      update: {},
+  for (const projectData of PROJECTS) {
+    const project = await prisma.project.upsert({
+      where: { organizationId_key: { organizationId: org.id, key: projectData.key } },
+      create: {
+        organizationId: org.id,
+        name: projectData.name,
+        key: projectData.key,
+        description: projectData.description,
+        color: projectData.color,
+      },
+      update: {
+        name: projectData.name,
+        description: projectData.description,
+        color: projectData.color,
+      },
     })
+
+    for (const user of users) {
+      await prisma.projectMember.upsert({
+        where: { projectId_userId: { projectId: project.id, userId: user.id } },
+        create: { projectId: project.id, userId: user.id, role: 'DEVELOPER' },
+        update: {},
+      })
+    }
   }
+
+  const fbProject = await prisma.project.findUniqueOrThrow({
+    where: { organizationId_key: { organizationId: org.id, key: 'FB' } },
+  })
 
   const seedTasks = [
     {
@@ -69,6 +101,8 @@ async function main() {
       status: TaskStatus.IN_PROGRESS,
       priority: TaskPriority.HIGH,
       assigneeId: users[0].id,
+      tags: ['设计'],
+      dueDate: new Date('2026-03-15'),
     },
     {
       number: 13,
@@ -76,6 +110,8 @@ async function main() {
       status: TaskStatus.IN_PROGRESS,
       priority: TaskPriority.HIGH,
       assigneeId: users[1].id,
+      tags: ['开发'],
+      dueDate: new Date(),
     },
     {
       number: 14,
@@ -83,6 +119,8 @@ async function main() {
       status: TaskStatus.TODO,
       priority: TaskPriority.MEDIUM,
       assigneeId: users[0].id,
+      tags: ['设计'],
+      dueDate: new Date(Date.now() - 86400000),
     },
     {
       number: 15,
@@ -90,6 +128,8 @@ async function main() {
       status: TaskStatus.IN_REVIEW,
       priority: TaskPriority.HIGH,
       assigneeId: users[2].id,
+      tags: ['开发'],
+      dueDate: new Date('2026-03-20'),
     },
     {
       number: 16,
@@ -97,30 +137,37 @@ async function main() {
       status: TaskStatus.DONE,
       priority: TaskPriority.MEDIUM,
       assigneeId: users[0].id,
+      tags: ['管理'],
+      dueDate: new Date('2026-03-01'),
+      completedAt: new Date(),
     },
   ]
 
   for (const task of seedTasks) {
+    const { completedAt, ...taskData } = task
     await prisma.task.upsert({
-      where: { projectId_number: { projectId: project.id, number: task.number } },
+      where: { projectId_number: { projectId: fbProject.id, number: task.number } },
       create: {
         organizationId: org.id,
-        projectId: project.id,
-        ...task,
-        dueDate: new Date('2026-03-15'),
+        projectId: fbProject.id,
+        ...taskData,
+        completedAt,
       },
       update: {
         title: task.title,
         status: task.status,
         priority: task.priority,
         assigneeId: task.assigneeId,
+        tags: task.tags,
+        dueDate: task.dueDate,
+        completedAt,
       },
     })
   }
 
   console.log('Seed completed.')
   console.log(`Organization: ${org.name} (${org.id})`)
-  console.log(`Project: ${project.name} (${project.id})`)
+  console.log(`Projects: ${PROJECTS.map((p) => p.key).join(', ')}`)
 }
 
 main()

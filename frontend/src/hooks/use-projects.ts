@@ -60,7 +60,10 @@ export function useProjectTasks(projectId: string | undefined) {
 
   return useQuery({
     queryKey: ['project-tasks', organization?.id, projectId],
-    queryFn: () => request<Task[]>(`/api/v1/projects/${projectId}/tasks`),
+    queryFn: () =>
+      request<{ items: Task[] }>(`/api/v1/projects/${projectId}/tasks`).then(
+        (res) => res.items,
+      ),
     enabled: Boolean(organization?.id && projectId),
   })
 }

@@ -65,6 +65,7 @@ model Project {
   name           String
   key            String
   description    String?
+  color          String   @default("#3370FF")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -118,8 +119,11 @@ model Task {
   description    String?
   status         TaskStatus   @default(TODO)
   priority       TaskPriority @default(MEDIUM)
+  tags           String[]     @default([])
   assigneeId     String?
   dueDate        DateTime?
+  completedAt    DateTime?
+  sortOrder      Float        @default(0)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 

@@ -15,15 +15,20 @@ import { useApiClient } from '@/hooks/use-api-client'
 interface DashboardStats {
   total: number
   myOpenTasks: number
+  myOverdueTasks: number
+  myTodayTasks: number
   projectCount: number
+  completedThisWeek: number
   statusCounts: Record<string, number>
+  myTodos: import('@/types').Task[]
   projects: Array<{
     id: string
     name: string
     key: string
-    todoCount: number
-    inProgressCount: number
+    color: string
     doneCount: number
+    totalCount: number
+    progress: number
   }>
 }
 
@@ -33,19 +38,14 @@ export function DashboardPage() {
   const { request } = useApiClient()
   const { openTask } = useTasks()
 
-  const { data: myTasks = [] } = useQuery({
-    queryKey: ['my-tasks', organization?.id],
-    queryFn: () => request<Array<import('@/types').Task>>('/api/v1/tasks/my'),
-    enabled: Boolean(organization?.id),
-  })
-
   const { data: dashboard } = useQuery({
     queryKey: ['dashboard', organization?.id],
     queryFn: () => request<DashboardStats>('/api/v1/tasks/dashboard'),
     enabled: Boolean(organization?.id),
   })
 
-  const openTasks = myTasks.filter((task) => task.status !== 'done')
+  const myTodos = dashboard?.myTodos ?? []
+  const openTasks = myTodos.filter((task) => task.status !== 'done')
   const userName = me?.user.name ?? '用户'
 
   return (
@@ -54,7 +54,8 @@ export function DashboardPage() {
         <div>
           <h1 className="text-xl font-semibold">早上好，{userName}</h1>
           <p className="text-sm text-muted-foreground">
-            今日待办 {openTasks.length} 项 · 进行中 {dashboard?.myOpenTasks ?? 0} 项
+            今日待办 {dashboard?.myTodayTasks ?? openTasks.length} 项 · 逾期{' '}
+            {dashboard?.myOverdueTasks ?? 0} 项
           </p>
         </div>
 
@@ -117,9 +118,9 @@ export function DashboardPage() {
               </div>
               <div>
                 <div className="text-2xl font-semibold">
-                  {dashboard?.statusCounts?.done ?? 0}
+                  {dashboard?.completedThisWeek ?? dashboard?.statusCounts?.done ?? 0}
                 </div>
-                <div className="text-sm text-muted-foreground">已完成任务</div>
+                <div className="text-sm text-muted-foreground">本周已完成</div>
               </div>
             </CardContent>
           </Card>
@@ -142,8 +143,8 @@ export function DashboardPage() {
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-3">
             {(dashboard?.projects ?? []).map((project) => {
-              const total = project.todoCount + project.inProgressCount + project.doneCount
-              const progress = total ? Math.round((project.doneCount / total) * 100) : 0
+              const total = project.totalCount
+              const progress = project.progress
 
               return (
                 <Link

@@ -22,7 +22,8 @@ export function MyTasksPage() {
 
   const { data: myTasks = [], isLoading } = useQuery({
     queryKey: ['my-tasks', organization?.id],
-    queryFn: () => request<Task[]>('/api/v1/tasks/my'),
+    queryFn: () =>
+      request<{ items: Task[] }>('/api/v1/tasks/my').then((res) => res.items),
     enabled: Boolean(organization?.id),
   })
 
