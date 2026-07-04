@@ -1,4 +1,6 @@
 import { Link } from 'react-router-dom'
+import { useOrganization } from '@clerk/clerk-react'
+import { useQuery } from '@tanstack/react-query'
 import { CheckCircle2, FolderKanban } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -6,21 +8,53 @@ import { Progress } from '@/components/ui/progress'
 import { TaskStatusChart } from '@/components/dashboard/task-status-chart'
 import { StatusBadge } from '@/components/task/task-badges'
 import { TaskDetailSheet } from '@/components/task/task-detail-sheet'
+import { useSession } from '@/contexts/session-context'
 import { useTasks } from '@/contexts/task-context'
-import { currentUser, mockProjects } from '@/data/mock'
+import { useApiClient } from '@/hooks/use-api-client'
+
+interface DashboardStats {
+  total: number
+  myOpenTasks: number
+  projectCount: number
+  statusCounts: Record<string, number>
+  projects: Array<{
+    id: string
+    name: string
+    key: string
+    todoCount: number
+    inProgressCount: number
+    doneCount: number
+  }>
+}
 
 export function DashboardPage() {
-  const { tasks, openTask } = useTasks()
-  const myTasks = tasks.filter((task) => task.assignee?.id === currentUser.id)
-  const overdueCount = myTasks.filter((task) => task.dueDate === '昨天').length
+  const { me } = useSession()
+  const { organization } = useOrganization()
+  const { request } = useApiClient()
+  const { openTask } = useTasks()
+
+  const { data: myTasks = [] } = useQuery({
+    queryKey: ['my-tasks', organization?.id],
+    queryFn: () => request<Array<import('@/types').Task>>('/api/v1/tasks/my'),
+    enabled: Boolean(organization?.id),
+  })
+
+  const { data: dashboard } = useQuery({
+    queryKey: ['dashboard', organization?.id],
+    queryFn: () => request<DashboardStats>('/api/v1/tasks/dashboard'),
+    enabled: Boolean(organization?.id),
+  })
+
+  const openTasks = myTasks.filter((task) => task.status !== 'done')
+  const userName = me?.user.name ?? '用户'
 
   return (
     <>
       <div className="space-y-6">
         <div>
-          <h1 className="text-xl font-semibold">早上好，{currentUser.name}</h1>
+          <h1 className="text-xl font-semibold">早上好，{userName}</h1>
           <p className="text-sm text-muted-foreground">
-            今日待办 {myTasks.length} 项 · 逾期 {overdueCount} 项
+            今日待办 {openTasks.length} 项 · 进行中 {dashboard?.myOpenTasks ?? 0} 项
           </p>
         </div>
 
@@ -33,27 +67,35 @@ export function DashboardPage() {
               </Link>
             </CardHeader>
             <CardContent className="space-y-2">
-              {myTasks.map((task) => (
-                <button
-                  key={task.id}
-                  type="button"
-                  onClick={() => openTask(task.id)}
-                  className="flex w-full items-center gap-3 rounded-lg border border-border p-3 text-left transition-colors hover:border-primary/40 hover:bg-muted/30"
-                >
-                  <Checkbox />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium">{task.title}</div>
-                    <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-                      <span>{task.projectName}</span>
-                      <span>·</span>
-                      <span className={task.dueDate === '昨天' ? 'text-destructive' : ''}>
-                        {task.dueDate}
-                      </span>
+              {openTasks.length === 0 ? (
+                <div className="py-8 text-center text-sm text-muted-foreground">
+                  暂无待办任务
+                </div>
+              ) : (
+                openTasks.slice(0, 5).map((task) => (
+                  <button
+                    key={task.id}
+                    type="button"
+                    onClick={() => openTask(task.id)}
+                    className="flex w-full items-center gap-3 rounded-lg border border-border p-3 text-left transition-colors hover:border-primary/40 hover:bg-muted/30"
+                  >
+                    <Checkbox />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium">{task.title}</div>
+                      <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                        <span>{task.projectName}</span>
+                        {task.dueDate ? (
+                          <>
+                            <span>·</span>
+                            <span>{task.dueDate}</span>
+                          </>
+                        ) : null}
+                      </div>
                     </div>
-                  </div>
-                  <StatusBadge status={task.status} />
-                </button>
-              ))}
+                    <StatusBadge status={task.status} />
+                  </button>
+                ))
+              )}
             </CardContent>
           </Card>
 
@@ -62,7 +104,7 @@ export function DashboardPage() {
               <CardTitle className="text-base">任务状态分布</CardTitle>
             </CardHeader>
             <CardContent>
-              <TaskStatusChart />
+              <TaskStatusChart statusCounts={dashboard?.statusCounts} />
             </CardContent>
           </Card>
         </div>
@@ -74,8 +116,10 @@ export function DashboardPage() {
                 <CheckCircle2 className="size-6 text-primary" />
               </div>
               <div>
-                <div className="text-2xl font-semibold">28</div>
-                <div className="text-sm text-muted-foreground">本周已完成</div>
+                <div className="text-2xl font-semibold">
+                  {dashboard?.statusCounts?.done ?? 0}
+                </div>
+                <div className="text-sm text-muted-foreground">已完成任务</div>
               </div>
             </CardContent>
           </Card>
@@ -85,7 +129,7 @@ export function DashboardPage() {
                 <FolderKanban className="size-6 text-[#FF8800]" />
               </div>
               <div>
-                <div className="text-2xl font-semibold">{mockProjects.length}</div>
+                <div className="text-2xl font-semibold">{dashboard?.projectCount ?? 0}</div>
                 <div className="text-sm text-muted-foreground">累计参与项目</div>
               </div>
             </CardContent>
@@ -97,9 +141,9 @@ export function DashboardPage() {
             <CardTitle className="text-base">项目概览</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-3">
-            {mockProjects.map((project) => {
+            {(dashboard?.projects ?? []).map((project) => {
               const total = project.todoCount + project.inProgressCount + project.doneCount
-              const progress = Math.round((project.doneCount / total) * 100)
+              const progress = total ? Math.round((project.doneCount / total) * 100) : 0
 
               return (
                 <Link

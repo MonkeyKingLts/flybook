@@ -108,7 +108,7 @@ export async function updateTask(
   userId: string,
   patch: {
     title?: string
-    description?: string
+    description?: string | null
     priority?: string
     assigneeId?: string | null
     dueDate?: string | null
@@ -188,8 +188,67 @@ export async function listMyTasks(userId: string, organizationId: string) {
   })
 }
 
+export async function listComments(
+  taskId: string,
+  organizationId: string,
+) {
+  const task = await prisma.task.findFirst({
+    where: { id: taskId, organizationId },
+  })
+  if (!task) throw new NotFoundError('任务不存在')
+
+  const comments = await prisma.taskComment.findMany({
+    where: { taskId },
+    include: { author: { select: { id: true, name: true, avatarUrl: true } } },
+    orderBy: { createdAt: 'desc' },
+  })
+
+  return comments.map((comment) => ({
+    id: comment.id,
+    content: comment.content,
+    createdAt: comment.createdAt.toISOString(),
+    author: {
+      id: comment.author.id,
+      name: comment.author.name,
+      avatar: comment.author.avatarUrl ?? undefined,
+    },
+  }))
+}
+
+export async function createComment(
+  taskId: string,
+  organizationId: string,
+  userId: string,
+  content: string,
+) {
+  const task = await prisma.task.findFirst({
+    where: { id: taskId, organizationId },
+  })
+  if (!task) throw new NotFoundError('任务不存在')
+
+  const comment = await prisma.taskComment.create({
+    data: {
+      taskId,
+      authorId: userId,
+      content,
+    },
+    include: { author: { select: { id: true, name: true, avatarUrl: true } } },
+  })
+
+  return {
+    id: comment.id,
+    content: comment.content,
+    createdAt: comment.createdAt.toISOString(),
+    author: {
+      id: comment.author.id,
+      name: comment.author.name,
+      avatar: comment.author.avatarUrl ?? undefined,
+    },
+  }
+}
+
 export async function getDashboardStats(organizationId: string, userId: string) {
-  const [statusGroups, myTasks, projectCount] = await Promise.all([
+  const [statusGroups, myOpenTasks, projectCount, projects] = await Promise.all([
     prisma.task.groupBy({
       by: ['status'],
       where: { organizationId },
@@ -199,18 +258,53 @@ export async function getDashboardStats(organizationId: string, userId: string) 
       where: { organizationId, assigneeId: userId, status: { not: 'DONE' } },
     }),
     prisma.project.count({ where: { organizationId } }),
+    prisma.project.findMany({
+      where: { organizationId },
+      include: { tasks: { select: { status: true } } },
+      orderBy: { updatedAt: 'desc' },
+      take: 6,
+    }),
   ])
 
-  const statusCounts = Object.fromEntries(
-    statusGroups.map((g) => [g.status, g._count._all]),
-  ) as Record<string, number>
+  const statusCounts: Record<string, number> = {
+    todo: 0,
+    in_progress: 0,
+    in_review: 0,
+    done: 0,
+    blocked: 0,
+  }
+
+  for (const group of statusGroups) {
+    const key = group.status.toLowerCase()
+    if (key === 'in_review') {
+      statusCounts.in_review = group._count._all
+    } else if (key === 'in_progress') {
+      statusCounts.in_progress = group._count._all
+    } else {
+      statusCounts[key] = group._count._all
+    }
+  }
 
   const total = statusGroups.reduce((sum, g) => sum + g._count._all, 0)
 
   return {
     total,
-    myOpenTasks: myTasks,
+    myOpenTasks,
     projectCount,
     statusCounts,
+    projects: projects.map((project) => {
+      const tasks = project.tasks
+      const todoCount = tasks.filter((t) => t.status === 'TODO').length
+      const inProgressCount = tasks.filter((t) => t.status === 'IN_PROGRESS').length
+      const doneCount = tasks.filter((t) => t.status === 'DONE').length
+      return {
+        id: project.id,
+        name: project.name,
+        key: project.key,
+        todoCount,
+        inProgressCount,
+        doneCount,
+      }
+    }),
   }
 }

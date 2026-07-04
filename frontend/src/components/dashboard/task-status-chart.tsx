@@ -11,9 +11,21 @@ const CHART_COLORS: Record<TaskStatus, string> = {
   blocked: '#F54A45',
 }
 
-export function TaskStatusChart() {
+interface TaskStatusChartProps {
+  statusCounts?: Record<string, number>
+}
+
+export function TaskStatusChart({ statusCounts: externalCounts }: TaskStatusChartProps) {
   const { getStatusCounts } = useTasks()
-  const counts = getStatusCounts()
+  const counts = externalCounts
+    ? ({
+        todo: externalCounts.todo ?? 0,
+        in_progress: externalCounts.in_progress ?? 0,
+        in_review: externalCounts.in_review ?? 0,
+        done: externalCounts.done ?? 0,
+        blocked: externalCounts.blocked ?? 0,
+      } satisfies Record<TaskStatus, number>)
+    : getStatusCounts()
 
   const data = (['todo', 'in_progress', 'in_review', 'done'] as TaskStatus[])
     .map((status) => ({

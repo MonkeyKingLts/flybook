@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { CreateTaskDialog } from '@/components/task/create-task-dialog'
 import { TaskDetailSheet } from '@/components/task/task-detail-sheet'
 import { useTasks } from '@/contexts/task-context'
-import { mockProjects } from '@/data/mock'
+import { useProject } from '@/hooks/use-projects'
 import { cn } from '@/lib/utils'
 
 const projectTabs = [
@@ -16,9 +16,13 @@ const projectTabs = [
 ]
 
 export function ProjectLayout() {
-  const { projectId = '1' } = useParams()
+  const { projectId } = useParams()
   const { openCreateDialog } = useTasks()
-  const project = mockProjects.find((item) => item.id === projectId) ?? mockProjects[0]
+  const { data: project, isLoading } = useProject(projectId)
+
+  if (isLoading || !project) {
+    return <div className="text-sm text-muted-foreground">加载项目信息...</div>
+  }
 
   return (
     <>
@@ -36,7 +40,7 @@ export function ProjectLayout() {
                 <Star className="size-4 text-muted-foreground" />
               </div>
               <p className="text-sm text-muted-foreground">
-                Project ID: PROJ-882 · Updated 10 mins ago
+                更新于 {project.updatedAt}
               </p>
             </div>
           </div>

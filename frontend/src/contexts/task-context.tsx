@@ -6,8 +6,10 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import { useOrganization } from '@clerk/clerk-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { mockTasks, mockUsers } from '@/data/mock'
+import { useApiClient } from '@/hooks/use-api-client'
 import { KANBAN_COLUMNS } from '@/lib/constants'
 import type { Task, TaskPriority, TaskStatus } from '@/types'
 
@@ -24,6 +26,7 @@ interface CreateTaskInput {
 
 interface TaskContextValue {
   tasks: Task[]
+  isLoading: boolean
   selectedTask: Task | null
   createDialogOpen: boolean
   createDefaultStatus: TaskStatus
@@ -36,6 +39,7 @@ interface TaskContextValue {
   createTask: (input: CreateTaskInput) => void
   getProjectTasks: (projectId: string) => Task[]
   getStatusCounts: () => Record<TaskStatus, number>
+  refetchTasks: () => void
 }
 
 const TaskContext = createContext<TaskContextValue | null>(null)
@@ -56,10 +60,67 @@ function isAllowedTransition(from: TaskStatus, to: TaskStatus) {
 }
 
 export function TaskProvider({ children }: { children: ReactNode }) {
-  const [tasks, setTasks] = useState<Task[]>(mockTasks)
+  const { organization } = useOrganization()
+  const { request } = useApiClient()
+  const queryClient = useQueryClient()
+
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [createDefaultStatus, setCreateDefaultStatus] = useState<TaskStatus>('todo')
+
+  const { data: tasks = [], isLoading, refetch } = useQuery({
+    queryKey: ['tasks', organization?.id],
+    queryFn: async () => {
+      const projects = await request<Array<{ id: string }>>('/api/v1/projects')
+      const taskLists = await Promise.all(
+        projects.map((project) =>
+          request<Task[]>(`/api/v1/projects/${project.id}/tasks`),
+        ),
+      )
+      return taskLists.flat()
+    },
+    enabled: Boolean(organization?.id),
+  })
+
+  const transitionMutation = useMutation({
+    mutationFn: ({ taskId, status }: { taskId: string; status: TaskStatus }) =>
+      request<Task>(`/api/v1/tasks/${taskId}/transition`, {
+        method: 'POST',
+        body: JSON.stringify({ toStatus: status }),
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      toast.success('状态已更新')
+    },
+    onError: () => {
+      toast.error('状态更新失败')
+    },
+  })
+
+  const createMutation = useMutation({
+    mutationFn: (input: CreateTaskInput) =>
+      request<Task>(`/api/v1/projects/${input.projectId}/tasks`, {
+        method: 'POST',
+        body: JSON.stringify({
+          title: input.title,
+          description: input.description,
+          status: input.status,
+          priority: input.priority,
+          assigneeId: input.assigneeId,
+          dueDate: input.dueDate,
+        }),
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      setCreateDialogOpen(false)
+      toast.success('任务已创建')
+    },
+    onError: () => {
+      toast.error('任务创建失败')
+    },
+  })
 
   const selectedTask = useMemo(
     () => tasks.find((task) => task.id === selectedTaskId) ?? null,
@@ -83,69 +144,34 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     setCreateDialogOpen(false)
   }, [])
 
-  const updateTaskStatus = useCallback((taskId: string, status: TaskStatus) => {
-    const task = tasks.find((item) => item.id === taskId)
-    if (!task) return false
+  const updateTaskStatus = useCallback(
+    (taskId: string, status: TaskStatus) => {
+      const task = tasks.find((item) => item.id === taskId)
+      if (!task) return false
 
-    if (!isAllowedTransition(task.status, status)) {
-      toast.error('无法流转到该状态', {
-        description: `「${task.title}」不能从当前状态直接变更`,
-      })
-      return false
-    }
+      if (!isAllowedTransition(task.status, status)) {
+        toast.error('无法流转到该状态', {
+          description: `「${task.title}」不能从当前状态直接变更`,
+        })
+        return false
+      }
 
-    setTasks((prev) =>
-      prev.map((item) =>
-        item.id === taskId
-          ? { ...item, status, updatedAt: '刚刚' }
-          : item,
-      ),
-    )
-    toast.success('状态已更新')
-    return true
-  }, [tasks])
+      transitionMutation.mutate({ taskId, status })
+      return true
+    },
+    [tasks, transitionMutation],
+  )
 
-  const updateTask = useCallback((taskId: string, patch: Partial<Task>) => {
-    setTasks((prev) =>
-      prev.map((item) =>
-        item.id === taskId ? { ...item, ...patch, updatedAt: '刚刚' } : item,
-      ),
-    )
+  const updateTask = useCallback((_taskId: string, _patch: Partial<Task>) => {
+    toast.info('任务编辑功能即将上线')
   }, [])
 
-  const createTask = useCallback((input: CreateTaskInput) => {
-    const projectTasks = tasks.filter((task) => task.projectId === input.projectId)
-    const nextNum = projectTasks.length + 12
-    const projectKey = input.projectName.includes('飞书')
-      ? 'FB'
-      : input.projectName.includes('官网')
-        ? 'WEB'
-        : 'APP'
-
-    const assignee = input.assigneeId
-      ? mockUsers.find((user) => user.id === input.assigneeId)
-      : undefined
-
-    const newTask: Task = {
-      id: String(Date.now()),
-      key: `${projectKey}-${nextNum}`,
-      title: input.title,
-      description: input.description,
-      status: input.status,
-      priority: input.priority,
-      projectId: input.projectId,
-      projectName: input.projectName,
-      assignee,
-      dueDate: input.dueDate,
-      updatedAt: '刚刚',
-      createdAt: '今天',
-      commentCount: 0,
-    }
-
-    setTasks((prev) => [newTask, ...prev])
-    setCreateDialogOpen(false)
-    toast.success('任务已创建')
-  }, [tasks])
+  const createTask = useCallback(
+    (input: CreateTaskInput) => {
+      createMutation.mutate(input)
+    },
+    [createMutation],
+  )
 
   const getProjectTasks = useCallback(
     (projectId: string) => tasks.filter((task) => task.projectId === projectId),
@@ -169,6 +195,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       tasks,
+      isLoading,
       selectedTask,
       createDialogOpen,
       createDefaultStatus,
@@ -181,9 +208,13 @@ export function TaskProvider({ children }: { children: ReactNode }) {
       createTask,
       getProjectTasks,
       getStatusCounts,
+      refetchTasks: () => {
+        void refetch()
+      },
     }),
     [
       tasks,
+      isLoading,
       selectedTask,
       createDialogOpen,
       createDefaultStatus,
@@ -196,6 +227,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
       createTask,
       getProjectTasks,
       getStatusCounts,
+      refetch,
     ],
   )
 

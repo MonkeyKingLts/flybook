@@ -1,3 +1,5 @@
+import { useOrganization } from '@clerk/clerk-react'
+import { useQuery } from '@tanstack/react-query'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Table,
@@ -10,11 +12,19 @@ import {
 import { PriorityBadge, StatusBadge } from '@/components/task/task-badges'
 import { TaskDetailSheet } from '@/components/task/task-detail-sheet'
 import { useTasks } from '@/contexts/task-context'
-import { currentUser } from '@/data/mock'
+import { useApiClient } from '@/hooks/use-api-client'
+import type { Task } from '@/types'
 
 export function MyTasksPage() {
-  const { tasks, openTask } = useTasks()
-  const myTasks = tasks.filter((task) => task.assignee?.id === currentUser.id)
+  const { organization } = useOrganization()
+  const { request } = useApiClient()
+  const { openTask } = useTasks()
+
+  const { data: myTasks = [], isLoading } = useQuery({
+    queryKey: ['my-tasks', organization?.id],
+    queryFn: () => request<Task[]>('/api/v1/tasks/my'),
+    enabled: Boolean(organization?.id),
+  })
 
   return (
     <>
@@ -31,38 +41,42 @@ export function MyTasksPage() {
         </Tabs>
 
         <div className="overflow-hidden rounded-lg border border-border bg-card">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/40 hover:bg-muted/40">
-                <TableHead>任务标题</TableHead>
-                <TableHead>项目</TableHead>
-                <TableHead>状态</TableHead>
-                <TableHead>优先级</TableHead>
-                <TableHead>截止日期</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {myTasks.map((task) => (
-                <TableRow
-                  key={task.id}
-                  className="cursor-pointer"
-                  onClick={() => openTask(task.id)}
-                >
-                  <TableCell className="font-medium">{task.title}</TableCell>
-                  <TableCell>{task.projectName}</TableCell>
-                  <TableCell>
-                    <StatusBadge status={task.status} />
-                  </TableCell>
-                  <TableCell>
-                    <PriorityBadge priority={task.priority} />
-                  </TableCell>
-                  <TableCell className={task.dueDate === '昨天' ? 'text-destructive' : ''}>
-                    {task.dueDate}
-                  </TableCell>
+          {isLoading ? (
+            <div className="p-8 text-center text-sm text-muted-foreground">加载中...</div>
+          ) : myTasks.length === 0 ? (
+            <div className="p-8 text-center text-sm text-muted-foreground">暂无任务</div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/40 hover:bg-muted/40">
+                  <TableHead>任务标题</TableHead>
+                  <TableHead>项目</TableHead>
+                  <TableHead>状态</TableHead>
+                  <TableHead>优先级</TableHead>
+                  <TableHead>截止日期</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {myTasks.map((task) => (
+                  <TableRow
+                    key={task.id}
+                    className="cursor-pointer"
+                    onClick={() => openTask(task.id)}
+                  >
+                    <TableCell className="font-medium">{task.title}</TableCell>
+                    <TableCell>{task.projectName}</TableCell>
+                    <TableCell>
+                      <StatusBadge status={task.status} />
+                    </TableCell>
+                    <TableCell>
+                      <PriorityBadge priority={task.priority} />
+                    </TableCell>
+                    <TableCell>{task.dueDate ?? '-'}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </div>
       </div>
 

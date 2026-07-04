@@ -40,9 +40,12 @@ npm install
 
 ```bash
 npm run db:generate
-npm run db:push      # 或 npm run db:migrate
-npm run db:seed      # 填充演示数据
+npm run db:migrate   # 推荐：应用迁移到 Neon
+# 或 npm run db:push  # 快速原型，不记录迁移历史
+npm run db:seed      # 填充演示数据（可选）
 ```
+
+首次连接 Neon 时，确保 `DATABASE_URL` 包含 `?sslmode=require`。
 
 ### 4. 启动服务
 
@@ -72,17 +75,21 @@ Authorization: Bearer <clerk_session_token>
 |------|------|------|
 | GET | `/health` | 健康检查 |
 | GET | `/api/v1/me` | 当前用户 + 组织 |
-| GET | `/api/v1/organizations/:orgId/projects` | 项目列表 |
-| POST | `/api/v1/organizations/:orgId/projects` | 创建项目 |
-| GET | `/api/v1/organizations/:orgId/projects/:id` | 项目详情 |
-| GET | `/api/v1/organizations/:orgId/projects/:id/tasks` | 项目任务 |
-| POST | `/api/v1/organizations/:orgId/projects/:id/tasks` | 创建任务 |
-| GET | `/api/v1/organizations/:orgId/projects/:id/stats` | 项目统计 |
+| GET | `/api/v1/organizations/members` | 组织成员列表 |
+| GET | `/api/v1/projects` | 项目列表 |
+| POST | `/api/v1/projects` | 创建项目 |
+| GET | `/api/v1/projects/:id` | 项目详情 |
+| GET | `/api/v1/projects/:id/members` | 项目成员 |
+| GET | `/api/v1/projects/:id/tasks` | 项目任务 |
+| POST | `/api/v1/projects/:id/tasks` | 创建任务 |
+| GET | `/api/v1/projects/:id/stats` | 项目统计 |
 | GET | `/api/v1/tasks/my` | 我的任务 |
 | GET | `/api/v1/tasks/dashboard` | 工作台统计 |
 | GET | `/api/v1/tasks/:id` | 任务详情 |
 | PATCH | `/api/v1/tasks/:id` | 更新任务 |
 | POST | `/api/v1/tasks/:id/transition` | 状态流转 |
+| GET | `/api/v1/tasks/:id/comments` | 任务评论 |
+| POST | `/api/v1/tasks/:id/comments` | 添加评论 |
 | POST | `/api/webhooks/clerk` | Clerk Webhook |
 
 ### 响应格式

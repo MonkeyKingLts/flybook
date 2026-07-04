@@ -1,93 +1,122 @@
 import { Router } from 'express'
-import type { Request, Response } from 'express'
-import { prisma } from '../lib/prisma.js'
-import { ok } from '../utils/response.js'
-import { formatProject } from '../utils/serializers.js'
-import { createProject, getProject, getProjectStats, listProjects } from '../services/project.service.js'
-import { createTask, listProjectTasks } from '../services/task.service.js'
-import { formatTask } from '../utils/serializers.js'
 import { z } from 'zod'
+import { BadRequestError } from '../lib/errors.js'
+import { requireOrganization } from '../middleware/auth.js'
+import { ok } from '../utils/response.js'
 import { param } from '../utils/params.js'
+import { formatProject, formatTask } from '../utils/serializers.js'
+import * as projectService from '../services/project.service.js'
+import * as taskService from '../services/task.service.js'
 
-export const projectRouter = Router({ mergeParams: true })
+const router = Router()
 
-projectRouter.get('/', async (req: Request, res: Response) => {
-  const orgId = req.authContext!.organizationId!
-  const projects = await listProjects(orgId)
-  return ok(res, { items: projects.map(formatProject) })
+const createProjectSchema = z.object({
+  name: z.string().min(1).max(100),
+  key: z.string().min(2).max(5),
+  description: z.string().max(500).optional(),
 })
 
-projectRouter.post('/', async (req: Request, res: Response) => {
-  const orgId = req.authContext!.organizationId!
-  const userId = req.authContext!.user.id
+const createTaskSchema = z.object({
+  title: z.string().min(1).max(200),
+  description: z.string().max(2000).optional(),
+  status: z.enum(['todo', 'in_progress', 'in_review', 'done', 'blocked']).optional(),
+  priority: z.enum(['high', 'medium', 'low']).optional(),
+  assigneeId: z.string().optional(),
+  dueDate: z.string().optional(),
+})
 
-  const body = z
-    .object({
-      name: z.string().min(1),
-      key: z.string().min(2).max(5),
-      description: z.string().optional(),
+router.get('/', requireOrganization, async (req, res, next) => {
+  try {
+    const projects = await projectService.listProjects(req.authContext!.organizationId!)
+    ok(res, projects.map(formatProject))
+  } catch (error) {
+    next(error)
+  }
+})
+
+router.post('/', requireOrganization, async (req, res, next) => {
+  try {
+    const parsed = createProjectSchema.safeParse(req.body)
+    if (!parsed.success) {
+      throw new BadRequestError(parsed.error.issues[0]?.message ?? '参数错误')
+    }
+
+    const project = await projectService.createProject(
+      req.authContext!.organizationId!,
+      req.authContext!.user.id,
+      parsed.data,
+    )
+    ok(res, formatProject(project), '创建成功')
+  } catch (error) {
+    next(error)
+  }
+})
+
+router.get('/:projectId', requireOrganization, async (req, res, next) => {
+  try {
+    const project = await projectService.getProject(
+      param(req, 'projectId'),
+      req.authContext!.organizationId!,
+    )
+    ok(res, formatProject(project))
+  } catch (error) {
+    next(error)
+  }
+})
+
+router.get('/:projectId/members', requireOrganization, async (req, res, next) => {
+  try {
+    const members = await projectService.listProjectMembers(
+      param(req, 'projectId'),
+      req.authContext!.organizationId!,
+    )
+    ok(res, members)
+  } catch (error) {
+    next(error)
+  }
+})
+
+router.get('/:projectId/tasks', requireOrganization, async (req, res, next) => {
+  try {
+    const tasks = await taskService.listProjectTasks(
+      param(req, 'projectId'),
+      req.authContext!.organizationId!,
+    )
+    ok(res, tasks.map((task) => formatTask(task)))
+  } catch (error) {
+    next(error)
+  }
+})
+
+router.post('/:projectId/tasks', requireOrganization, async (req, res, next) => {
+  try {
+    const parsed = createTaskSchema.safeParse(req.body)
+    if (!parsed.success) {
+      throw new BadRequestError(parsed.error.issues[0]?.message ?? '参数错误')
+    }
+
+    const task = await taskService.createTask({
+      organizationId: req.authContext!.organizationId!,
+      projectId: param(req, 'projectId'),
+      userId: req.authContext!.user.id,
+      ...parsed.data,
     })
-    .parse(req.body)
-
-  const project = await createProject(orgId, userId, body)
-  return ok(res, formatProject(project), '项目已创建')
+    ok(res, formatTask(task), '创建成功')
+  } catch (error) {
+    next(error)
+  }
 })
 
-projectRouter.get('/:projectId', async (req: Request, res: Response) => {
-  const orgId = req.authContext!.organizationId!
-  const project = await getProject(param(req, 'projectId'), orgId)
-  return ok(res, formatProject(project))
+router.get('/:projectId/stats', requireOrganization, async (req, res, next) => {
+  try {
+    const stats = await projectService.getProjectStats(
+      param(req, 'projectId'),
+      req.authContext!.organizationId!,
+    )
+    ok(res, stats)
+  } catch (error) {
+    next(error)
+  }
 })
 
-projectRouter.get('/:projectId/tasks', async (req: Request, res: Response) => {
-  const orgId = req.authContext!.organizationId!
-  const tasks = await listProjectTasks(param(req, 'projectId'), orgId)
-  return ok(res, { items: tasks.map((t) => formatTask(t)) })
-})
-
-projectRouter.post('/:projectId/tasks', async (req: Request, res: Response) => {
-  const orgId = req.authContext!.organizationId!
-  const userId = req.authContext!.user.id
-  const projectId = param(req, 'projectId')
-
-  const body = z
-    .object({
-      title: z.string().min(1),
-      description: z.string().optional(),
-      status: z.string().optional(),
-      priority: z.string().optional(),
-      assigneeId: z.string().optional(),
-      dueDate: z.string().optional(),
-    })
-    .parse(req.body)
-
-  const task = await createTask({
-    organizationId: orgId,
-    projectId,
-    userId,
-    ...body,
-  })
-
-  return ok(res, formatTask(task), '任务已创建')
-})
-
-projectRouter.get('/:projectId/stats', async (req: Request, res: Response) => {
-  const orgId = req.authContext!.organizationId!
-  const stats = await getProjectStats(param(req, 'projectId'), orgId)
-  return ok(res, stats)
-})
-
-projectRouter.get('/:projectId/members', async (req: Request, res: Response) => {
-  const orgId = req.authContext!.organizationId!
-  const projectId = param(req, 'projectId')
-  const members = await prisma.projectMember.findMany({
-    where: { project: { id: projectId, organizationId: orgId } },
-    include: { user: true },
-  })
-  return ok(res, {
-    items: members.map((m) => ({
-      ...m,
-      user: { id: m.user.id, name: m.user.name, email: m.user.email },
-    })),
-  })
-})
+export default router

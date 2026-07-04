@@ -17,7 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { mockUsers } from '@/data/mock'
+import { useOrgMembers } from '@/hooks/use-projects'
 import { useTasks } from '@/contexts/task-context'
 import { KANBAN_COLUMNS, PRIORITY_LABELS, STATUS_LABELS } from '@/lib/constants'
 import type { TaskPriority, TaskStatus } from '@/types'
@@ -35,12 +35,13 @@ export function CreateTaskDialog({ projectId, projectName }: CreateTaskDialogPro
     closeCreateDialog,
     createTask,
   } = useTasks()
+  const { data: members = [] } = useOrgMembers()
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [status, setStatus] = useState<TaskStatus>('todo')
   const [priority, setPriority] = useState<TaskPriority>('medium')
-  const [assigneeId, setAssigneeId] = useState<string>('1')
+  const [assigneeId, setAssigneeId] = useState<string>('')
   const [dueDate, setDueDate] = useState('')
 
   useEffect(() => {
@@ -49,10 +50,10 @@ export function CreateTaskDialog({ projectId, projectName }: CreateTaskDialogPro
       setTitle('')
       setDescription('')
       setPriority('medium')
-      setAssigneeId('1')
+      setAssigneeId(members[0]?.id ?? '')
       setDueDate('')
     }
-  }, [createDialogOpen, createDefaultStatus])
+  }, [createDialogOpen, createDefaultStatus, members])
 
   const handleSubmit = () => {
     if (!title.trim()) return
@@ -64,7 +65,7 @@ export function CreateTaskDialog({ projectId, projectName }: CreateTaskDialogPro
       priority,
       projectId,
       projectName,
-      assigneeId,
+      assigneeId: assigneeId || undefined,
       dueDate: dueDate || undefined,
     })
   }
@@ -132,7 +133,7 @@ export function CreateTaskDialog({ projectId, projectName }: CreateTaskDialogPro
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {mockUsers.map((user) => (
+                  {members.map((user) => (
                     <SelectItem key={user.id} value={user.id}>
                       {user.name}
                     </SelectItem>

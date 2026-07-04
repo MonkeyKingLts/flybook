@@ -1,77 +1,133 @@
 import { Router } from 'express'
-import type { Request, Response } from 'express'
 import { z } from 'zod'
-import {
-  getTaskById,
-  listMyTasks,
-  transitionTask,
-  updateTask,
-} from '../services/task.service.js'
-import { getDashboardStats } from '../services/task.service.js'
+import { BadRequestError } from '../lib/errors.js'
+import { requireOrganization } from '../middleware/auth.js'
 import { ok } from '../utils/response.js'
-import { formatTask } from '../utils/serializers.js'
 import { param } from '../utils/params.js'
+import { formatTask } from '../utils/serializers.js'
+import * as taskService from '../services/task.service.js'
 
-export const taskRouter = Router()
+const router = Router()
 
-taskRouter.get('/my', async (req: Request, res: Response) => {
-  const orgId = req.authContext!.organizationId!
-  const userId = req.authContext!.user.id
-  const tasks = await listMyTasks(userId, orgId)
-  return ok(res, { items: tasks.map((t) => formatTask(t)) })
+const updateTaskSchema = z.object({
+  title: z.string().min(1).max(200).optional(),
+  description: z.string().max(2000).optional().nullable(),
+  priority: z.enum(['high', 'medium', 'low']).optional(),
+  assigneeId: z.string().optional().nullable(),
+  dueDate: z.string().optional().nullable(),
 })
 
-taskRouter.get('/dashboard', async (req: Request, res: Response) => {
-  const orgId = req.authContext!.organizationId!
-  const userId = req.authContext!.user.id
-  const stats = await getDashboardStats(orgId, userId)
-  return ok(res, stats)
+const transitionSchema = z.object({
+  toStatus: z.enum(['todo', 'in_progress', 'in_review', 'done', 'blocked']),
 })
 
-taskRouter.get('/:taskId', async (req: Request, res: Response) => {
-  const orgId = req.authContext!.organizationId!
-  const task = await getTaskById(param(req, 'taskId'), orgId)
-  return ok(res, {
-    ...formatTask(task),
-    comments: task.comments.map((c) => ({
-      id: c.id,
-      content: c.content,
-      author: { id: c.author.id, name: c.author.name },
-      createdAt: c.createdAt,
-    })),
-    history: task.history.map((h) => ({
-      id: h.id,
-      fromStatus: h.fromStatus,
-      toStatus: h.toStatus,
-      changedBy: h.changedBy.name,
-      createdAt: h.createdAt,
-    })),
-  })
+const commentSchema = z.object({
+  content: z.string().min(1).max(2000),
 })
 
-taskRouter.patch('/:taskId', async (req: Request, res: Response) => {
-  const orgId = req.authContext!.organizationId!
-  const userId = req.authContext!.user.id
-
-  const body = z
-    .object({
-      title: z.string().min(1).optional(),
-      description: z.string().optional(),
-      priority: z.string().optional(),
-      assigneeId: z.string().nullable().optional(),
-      dueDate: z.string().nullable().optional(),
-    })
-    .parse(req.body)
-
-  const task = await updateTask(param(req, 'taskId'), orgId, userId, body)
-  return ok(res, formatTask(task), '任务已更新')
+router.get('/my', requireOrganization, async (req, res, next) => {
+  try {
+    const tasks = await taskService.listMyTasks(
+      req.authContext!.user.id,
+      req.authContext!.organizationId!,
+    )
+    ok(res, tasks.map((task) => formatTask(task)))
+  } catch (error) {
+    next(error)
+  }
 })
 
-taskRouter.post('/:taskId/transition', async (req: Request, res: Response) => {
-  const orgId = req.authContext!.organizationId!
-  const userId = req.authContext!.user.id
-
-  const body = z.object({ status: z.string().min(1) }).parse(req.body)
-  const task = await transitionTask(param(req, 'taskId'), orgId, userId, body.status)
-  return ok(res, formatTask(task), '状态已更新')
+router.get('/dashboard', requireOrganization, async (req, res, next) => {
+  try {
+    const stats = await taskService.getDashboardStats(
+      req.authContext!.organizationId!,
+      req.authContext!.user.id,
+    )
+    ok(res, stats)
+  } catch (error) {
+    next(error)
+  }
 })
+
+router.get('/:taskId', requireOrganization, async (req, res, next) => {
+  try {
+    const task = await taskService.getTaskById(
+      param(req, 'taskId'),
+      req.authContext!.organizationId!,
+    )
+    ok(res, formatTask(task))
+  } catch (error) {
+    next(error)
+  }
+})
+
+router.patch('/:taskId', requireOrganization, async (req, res, next) => {
+  try {
+    const parsed = updateTaskSchema.safeParse(req.body)
+    if (!parsed.success) {
+      throw new BadRequestError(parsed.error.issues[0]?.message ?? '参数错误')
+    }
+
+    const task = await taskService.updateTask(
+      param(req, 'taskId'),
+      req.authContext!.organizationId!,
+      req.authContext!.user.id,
+      parsed.data,
+    )
+    ok(res, formatTask(task), '更新成功')
+  } catch (error) {
+    next(error)
+  }
+})
+
+router.post('/:taskId/transition', requireOrganization, async (req, res, next) => {
+  try {
+    const parsed = transitionSchema.safeParse(req.body)
+    if (!parsed.success) {
+      throw new BadRequestError(parsed.error.issues[0]?.message ?? '参数错误')
+    }
+
+    const task = await taskService.transitionTask(
+      param(req, 'taskId'),
+      req.authContext!.organizationId!,
+      req.authContext!.user.id,
+      parsed.data.toStatus,
+    )
+    ok(res, formatTask(task), '状态已更新')
+  } catch (error) {
+    next(error)
+  }
+})
+
+router.get('/:taskId/comments', requireOrganization, async (req, res, next) => {
+  try {
+    const comments = await taskService.listComments(
+      param(req, 'taskId'),
+      req.authContext!.organizationId!,
+    )
+    ok(res, comments)
+  } catch (error) {
+    next(error)
+  }
+})
+
+router.post('/:taskId/comments', requireOrganization, async (req, res, next) => {
+  try {
+    const parsed = commentSchema.safeParse(req.body)
+    if (!parsed.success) {
+      throw new BadRequestError(parsed.error.issues[0]?.message ?? '参数错误')
+    }
+
+    const comment = await taskService.createComment(
+      param(req, 'taskId'),
+      req.authContext!.organizationId!,
+      req.authContext!.user.id,
+      parsed.data.content,
+    )
+    ok(res, comment, '评论已添加')
+  } catch (error) {
+    next(error)
+  }
+})
+
+export default router

@@ -66,6 +66,30 @@ export async function createProject(
   })
 }
 
+export async function listProjectMembers(
+  projectId: string,
+  organizationId: string,
+) {
+  const project = await prisma.project.findFirst({
+    where: { id: projectId, organizationId },
+  })
+  if (!project) throw new NotFoundError('项目不存在')
+
+  const members = await prisma.projectMember.findMany({
+    where: { projectId },
+    include: { user: true },
+    orderBy: { joinedAt: 'asc' },
+  })
+
+  return members.map((member) => ({
+    id: member.user.id,
+    name: member.user.name,
+    email: member.user.email,
+    avatar: member.user.avatarUrl ?? undefined,
+    role: member.role.toLowerCase(),
+  }))
+}
+
 export async function getProjectStats(projectId: string, organizationId: string) {
   const project = await prisma.project.findFirst({
     where: { id: projectId, organizationId },
