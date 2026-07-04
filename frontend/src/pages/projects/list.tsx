@@ -14,8 +14,24 @@ import { useTasks } from '@/contexts/task-context'
 
 export function ProjectListPage() {
   const { projectId = '1' } = useParams()
-  const { getProjectTasks, openTask } = useTasks()
+  const { getProjectTasks, openTask, isLoading } = useTasks()
   const tasks = getProjectTasks(projectId)
+
+  if (isLoading) {
+    return (
+      <div className="rounded-lg border border-border bg-card p-8 text-center text-sm text-muted-foreground">
+        加载任务中...
+      </div>
+    )
+  }
+
+  if (tasks.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
+        暂无任务
+      </div>
+    )
+  }
 
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-card">

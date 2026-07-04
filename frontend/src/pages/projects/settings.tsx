@@ -1,3 +1,4 @@
+import { useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -10,9 +11,18 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { mockUsers } from '@/data/mock'
+import { useProjectMembers } from '@/hooks/use-projects'
+
+const roleLabels: Record<string, string> = {
+  project_admin: '管理员',
+  developer: '开发者',
+  viewer: '查看者',
+}
 
 export function ProjectSettingsPage() {
+  const { projectId } = useParams()
+  const { data: members = [], isLoading } = useProjectMembers(projectId)
+
   return (
     <div className="space-y-6">
       <Card className="border-border shadow-sm">
@@ -30,35 +40,43 @@ export function ProjectSettingsPage() {
             <Button variant="ghost">发送邀请</Button>
           </div>
 
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>头像/姓名</TableHead>
-                <TableHead>邮箱</TableHead>
-                <TableHead>项目角色</TableHead>
-                <TableHead>加入时间</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {mockUsers.map((user, index) => (
-                <TableRow key={user.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Avatar className="size-7">
-                        <AvatarFallback>{user.name.slice(0, 1)}</AvatarFallback>
-                      </Avatar>
-                      {user.name}
-                    </div>
-                  </TableCell>
-                  <TableCell>{user.email}</TableCell>
-                  <TableCell>
-                    {index === 0 ? 'Owner' : index === 1 ? 'Developer' : 'Viewer'}
-                  </TableCell>
-                  <TableCell>2024-03-01</TableCell>
+          {isLoading ? (
+            <div className="py-8 text-center text-sm text-muted-foreground">加载中...</div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>头像/姓名</TableHead>
+                  <TableHead>邮箱</TableHead>
+                  <TableHead>项目角色</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {members.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={3} className="py-8 text-center text-muted-foreground">
+                      暂无项目成员
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  members.map((user) => (
+                    <TableRow key={user.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Avatar className="size-7">
+                            <AvatarFallback>{user.name.slice(0, 1)}</AvatarFallback>
+                          </Avatar>
+                          {user.name}
+                        </div>
+                      </TableCell>
+                      <TableCell>{user.email}</TableCell>
+                      <TableCell>{roleLabels[user.role] ?? user.role}</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 

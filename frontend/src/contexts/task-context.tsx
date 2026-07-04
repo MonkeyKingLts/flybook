@@ -90,11 +90,35 @@ export function TaskProvider({ children }: { children: ReactNode }) {
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      void queryClient.invalidateQueries({ queryKey: ['project-tasks'] })
       void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       toast.success('状态已更新')
     },
     onError: () => {
       toast.error('状态更新失败')
+    },
+  })
+
+  const updateMutation = useMutation({
+    mutationFn: ({ taskId, patch }: { taskId: string; patch: Partial<Task> }) =>
+      request<Task>(`/api/v1/tasks/${taskId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          title: patch.title,
+          description: patch.description,
+          priority: patch.priority,
+          assigneeId: patch.assignee?.id,
+          dueDate: patch.dueDate,
+        }),
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      void queryClient.invalidateQueries({ queryKey: ['project-tasks'] })
+      void queryClient.invalidateQueries({ queryKey: ['my-tasks'] })
+      void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    },
+    onError: () => {
+      toast.error('任务更新失败')
     },
   })
 
@@ -113,6 +137,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      void queryClient.invalidateQueries({ queryKey: ['project-tasks'] })
       void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       setCreateDialogOpen(false)
       toast.success('任务已创建')
@@ -162,9 +187,12 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     [tasks, transitionMutation],
   )
 
-  const updateTask = useCallback((_taskId: string, _patch: Partial<Task>) => {
-    toast.info('任务编辑功能即将上线')
-  }, [])
+  const updateTask = useCallback(
+    (taskId: string, patch: Partial<Task>) => {
+      updateMutation.mutate({ taskId, patch })
+    },
+    [updateMutation],
+  )
 
   const createTask = useCallback(
     (input: CreateTaskInput) => {

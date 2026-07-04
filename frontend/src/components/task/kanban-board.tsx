@@ -22,7 +22,7 @@ interface KanbanBoardProps {
 }
 
 export function KanbanBoard({ projectId }: KanbanBoardProps) {
-  const { getProjectTasks, updateTaskStatus } = useTasks()
+  const { getProjectTasks, updateTaskStatus, isLoading } = useTasks()
   const [activeTask, setActiveTask] = useState<Task | null>(null)
   const [search, setSearch] = useState('')
 
@@ -80,6 +80,10 @@ export function KanbanBoard({ projectId }: KanbanBoardProps) {
 
   return (
     <div className="space-y-4">
+      {isLoading ? (
+        <div className="py-12 text-center text-sm text-muted-foreground">加载任务中...</div>
+      ) : (
+        <>
       <div className="flex flex-wrap items-center gap-3">
         <Button variant="outline" size="sm">
           负责人
@@ -111,6 +115,8 @@ export function KanbanBoard({ projectId }: KanbanBoardProps) {
           {activeTask ? <TaskCard task={activeTask} isOverlay /> : null}
         </DragOverlay>
       </DndContext>
+        </>
+      )}
     </div>
   )
 }

@@ -1,18 +1,21 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Plus } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { CreateProjectDialog } from '@/components/project/create-project-dialog'
 import { useProjects } from '@/hooks/use-projects'
 
 export function ProjectsPage() {
   const { data: projects = [], isLoading } = useProjects()
+  const [createOpen, setCreateOpen] = useState(false)
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">项目</h1>
-        <Button>
+        <Button onClick={() => setCreateOpen(true)}>
           <Plus className="size-4" />
           新建项目
         </Button>
@@ -63,6 +66,8 @@ export function ProjectsPage() {
           ))}
         </div>
       )}
+
+      <CreateProjectDialog open={createOpen} onOpenChange={setCreateOpen} />
     </div>
   )
 }
